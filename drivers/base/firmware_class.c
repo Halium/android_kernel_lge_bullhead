@@ -39,7 +39,25 @@ MODULE_LICENSE("GPL");
 
 /* Builtin firmware support */
 
+
 #ifdef CONFIG_FW_LOADER
+
+static struct firmware_priv * fw_create_instance(struct *firmware, struct *desc);
+
+/* firmware behavior options */
+#define FW_OPT_UEVENT	(1U << 0)
+#define FW_OPT_NOWAIT	(1U << 1)
+#ifdef CONFIG_FW_LOADER_USER_HELPER
+#define FW_OPT_USERHELPER	(1U << 2)
+#else
+#define FW_OPT_USERHELPER	0
+#endif
+#ifdef CONFIG_FW_LOADER_USER_HELPER_FALLBACK
+#define FW_OPT_FALLBACK		FW_OPT_USERHELPER
+#else
+#define FW_OPT_FALLBACK		0
+#endif
+#define FW_OPT_NO_WARN	(1U << 3)
 
 extern struct builtin_fw __start_builtin_fw[];
 extern struct builtin_fw __end_builtin_fw[];
@@ -946,8 +964,7 @@ static void firmware_class_timeout_work(struct work_struct *work)
 	mutex_unlock(&fw_lock);
 }
 
-static struct firmware_priv *
-fw_create_instance(struct firmware *firmware, struct fw_desc *desc)
+static struct firmware_priv * fw_create_instance(struct firmware *firmware, struct fw_desc *desc)
 {
 	struct firmware_priv *fw_priv;
 	struct device *f_dev;
@@ -1037,7 +1054,7 @@ err_put_dev:
 	return retval;
 }
 
-static int fw_load_from_user_helper(struct firmware *firmware,
+/*static inline int fw_load_from_user_helper(struct firmware *firmware,
 				    struct fw_desc *desc, long timeout)
 {
 	struct firmware_priv *fw_priv;
@@ -1049,9 +1066,52 @@ static int fw_load_from_user_helper(struct firmware *firmware,
 	fw_priv->buf = firmware->priv;
 	return _request_firmware_load(fw_priv, desc->uevent, timeout);
 }
-#else /* CONFIG_FW_LOADER_USER_HELPER */
-static inline int
-fw_load_from_user_helper(struct firmware *firmware, const char *name,
+#else // -- removed to replace with mainline linux code below*/ /* CONFIG_FW_LOADER_USER_HELPER */
+#else
+static int fw_load_from_user_helper(struct firmware *firmware,
+				    const char *name, struct device *device,
+				    unsigned int opt_flags)
+{
+	struct firmware_priv *fw_priv;
+	long timeout;
+	int ret;
+
+	timeout = firmware_loading_timeout();
+	if (opt_flags & FW_OPT_NOWAIT) {
+		timeout = usermodehelper_read_lock_wait(timeout);
+		if (!timeout) {
+			dev_dbg(device, "firmware: %s loading timed out\n",
+				name);
+			return -EBUSY;
+		}
+	} else {
+		ret = usermodehelper_read_trylock();
+		if (WARN_ON(ret)) {
+			dev_err(device, "firmware: %s will not be loaded\n",
+				name);
+			return ret;
+		}
+	}
+
+	fw_priv = fw_create_instance(firmware, name, device, opt_flags);
+	if (IS_ERR(fw_priv)) {
+		ret = PTR_ERR(fw_priv);
+		goto out_unlock;
+	}
+
+	fw_priv->buf = firmware->priv;
+	ret = _request_firmware_load(fw_priv, opt_flags, timeout);
+
+	if (!ret)
+		ret = assign_firmware_buf(firmware, device, opt_flags);
+
+out_unlock:
+	usermodehelper_read_unlock();
+
+	return ret;
+}
+
+static inline int fw_load_from_user_helper(struct firmware *firmware, const char *name,
 			 struct device *device, bool uevent, bool nowait,
 			 long timeout)
 {
@@ -1178,7 +1238,7 @@ static int assign_firmware_buf(struct firmware *fw, struct device *device,
 }
 
 /* called from request_firmware() and request_firmware_work_func() */
-static int _request_firmware(struct fw_desc *desc)
+int _request_firmware(struct fw_desc *desc)
 {
 	struct firmware *fw;
 	long timeout;
@@ -1210,9 +1270,9 @@ static int _request_firmware(struct fw_desc *desc)
 		}
 	}
 
-	if (!fw_get_filesystem_firmware(desc->device, fw->priv,
-					desc->dest_addr, desc->dest_size))
-		ret = fw_load_from_user_helper(fw, desc, timeout);
+	if (!fw_get_filesystem_firmware(desc->device, fw->priv, desc->dest_addr, desc->dest_size))
+		ret = fw_load_from_user_helper(struct device *fw, struct firmware_buf * desc, timeout);
+//		ret = fw_load_from_user_helper(fw, *desc, timeout);
 	if (!ret)
 		ret = assign_firmware_buf(fw, desc->device, desc->nocache);
 

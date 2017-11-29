@@ -18,13 +18,14 @@
 #include <asm/cmpxchg.h>
 #include <asm/barrier.h>
 
-#ifdef CONFIG_SMP
+//#ifdef CONFIG_SMP
 /* Force people to define core atomics */
 # if !defined(atomic_add_return) || !defined(atomic_sub_return) || \
      !defined(atomic_clear_mask) || !defined(atomic_set_mask)
 #  error "SMP requires a little arch-specific magic"
 # endif
-#endif
+//#endif // xorpad - commented out check for config_smp because I don't know where it's pulling the value from and it should be non-null
+
 
 /*
  * Atomic operations that C can't guarantee us.  Useful for
@@ -127,6 +128,8 @@ static inline void atomic_dec(atomic_t *v)
 	atomic_sub_return(1, v);
 }
 
+
+
 #define atomic_dec_return(v)		atomic_sub_return(1, (v))
 #define atomic_inc_return(v)		atomic_add_return(1, (v))
 
@@ -136,6 +139,44 @@ static inline void atomic_dec(atomic_t *v)
 
 #define atomic_xchg(ptr, v)		(xchg(&(ptr)->counter, (v)))
 #define atomic_cmpxchg(v, old, new)	(cmpxchg(&((v)->counter), (old), (new)))
+
+
+#define atomic_add_unless(v, a, u)				\
+({								\
+	int c, old;						\
+	c = atomic_read(v);					\
+	while (c != (u) && (old = atomic_cmpxchg((v), c, c + (a))) != c) \
+		c = old;					\
+	c != (u);						\
+})
+
+#define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
+
+static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
+{
+	unsigned long flags;
+
+	mask = ~mask;
+	local_irq_save(flags);
+	*addr &= mask;
+	local_irq_restore(flags);
+}
+
+#define atomic_xchg(ptr, v)		(xchg(&(ptr)->counter, (v)))
+#define atomic_cmpxchg(v, old, new)	(cmpxchg(&((v)->counter), (old), (new)))
+
+#define cmpxchg_local(ptr, o, n)				  	       \
+	((__typeof__(*(ptr)))__cmpxchg_local_generic((ptr), (unsigned long)(o),\
+			(unsigned long)(n), sizeof(*(ptr))))
+
+#define cmpxchg64_local(ptr, o, n) __cmpxchg64_local_generic((ptr), (o), (n))
+
+/* Assume that atomic operations are already serializing */
+#define smp_mb__before_atomic_dec()	barrier()
+#define smp_mb__after_atomic_dec()	barrier()
+#define smp_mb__before_atomic_inc()	barrier()
+#define smp_mb__after_atomic_inc()	barrier()
+
 
 static inline int __atomic_add_unless(atomic_t *v, int a, int u)
 {

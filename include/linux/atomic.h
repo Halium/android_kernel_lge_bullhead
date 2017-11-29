@@ -8,7 +8,8 @@
  * We need the ugly external functions to break header recursion hell.
  */
 #ifndef smp_mb__before_atomic_inc
-static inline void __deprecated smp_mb__before_atomic_inc(void)
+//static inline void __deprecated smp_mb__before_atomic_inc(void)
+static inline void smp_mb__before_atomic_inc(void)
 {
 	extern void __smp_mb__before_atomic(void);
 	__smp_mb__before_atomic();
@@ -16,7 +17,8 @@ static inline void __deprecated smp_mb__before_atomic_inc(void)
 #endif
 
 #ifndef smp_mb__after_atomic_inc
-static inline void __deprecated smp_mb__after_atomic_inc(void)
+//static inline void __depricated smp_mb__after_atomic_inc(void)
+static inline void smp_mb__after_atomic_inc(void)
 {
 	extern void __smp_mb__after_atomic(void);
 	__smp_mb__after_atomic();
@@ -24,7 +26,8 @@ static inline void __deprecated smp_mb__after_atomic_inc(void)
 #endif
 
 #ifndef smp_mb__before_atomic_dec
-static inline void __deprecated smp_mb__before_atomic_dec(void)
+//static inline void __deprecated smp_mb__before_atomic_dec(void)
+static inline void smp_mb__before_atomic_dec(void)
 {
 	extern void __smp_mb__before_atomic(void);
 	__smp_mb__before_atomic();
@@ -32,7 +35,8 @@ static inline void __deprecated smp_mb__before_atomic_dec(void)
 #endif
 
 #ifndef smp_mb__after_atomic_dec
-static inline void __deprecated smp_mb__after_atomic_dec(void)
+//static inline void __deprecated smp_mb__after_atomic_dec(void)
+static inline void smp_mb__after_atomic_dec(void)
 {
 	extern void __smp_mb__after_atomic(void);
 	__smp_mb__after_atomic();
